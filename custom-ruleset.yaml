@@ -1,0 +1,90 @@
+
+extends:
+  - recommended
+
+rules:
+  # 1. Endpoint path (Operations) -> operation-description
+  operation-description: error
+  
+  # 2. Path and Query parameters -> parameter-description
+  parameter-description: error
+  
+  # 3. Headers -> Custom rule
+  rule/header-description:
+    subject:
+      type: Header
+      property: description
+    assertions:
+      defined: true
+    message: Header must have a description.
+    severity: warn
+
+  # 4 & 5. Request body fields & Response fields -> Custom rule
+  # Using Schema ensures all schema objects (including properties) have a description
+  rule/schema-description:
+    subject:
+      type: Schema
+      property: description
+    assertions:
+      defined: true
+    message: Schema (request/response field) must have a description.
+    severity: warn
+
+  # 6. Error codes (and other responses) -> Custom rule
+  rule/response-description:
+    subject:
+      type: Response
+      property: description
+    assertions:
+      defined: true
+    message: Response (including error codes) must have a description.
+    severity: warn
+
+
+
+
+
+
+
+
+  info-license: warn
+  info-license-strict: warn
+  no-ambiguous-paths: warn
+  no-duplicated-tag-names: warn
+  no-empty-servers: error
+  no-enum-type-mismatch: error
+  no-example-value-and-externalValue: error
+  no-identical-paths: error
+  no-invalid-media-type-examples: warn
+  no-invalid-parameter-examples: warn
+  no-invalid-schema-examples: warn
+  no-path-trailing-slash: error
+  no-required-schema-properties-undefined: warn
+  no-schema-type-mismatch: error
+  no-server-example.com: warn
+  no-server-trailing-slash: error
+  no-server-variables-empty-enum: error
+  no-unresolved-refs: error
+  no-unused-components: warn
+  no-undefined-server-variable: error
+  nullable-type-sibling: error
+  operation-2xx-response: warn
+  operation-4xx-response: warn
+  operation-operationId: warn
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+  operation-parameters-unique: error
+  operation-summary: error
+  path-declaration-must-exist: error
+  path-not-include-query: error
+  path-parameters-defined: error
+  path-params-defined: error
+  security-defined: error
+  spec-components-invalid-map-name: error
+  struct: error
+  tag-description: warn
+    
+
+
+
+  

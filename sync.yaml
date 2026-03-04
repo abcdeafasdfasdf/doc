@@ -1,0 +1,24 @@
+name: Trigger Sync
+
+on:
+  push:
+    branches: [master]
+    paths: ['api/sidebars.yaml']
+  
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why are you running this sync manually?"
+        required: true
+
+jobs:
+  call-sync:
+    uses: amitpanwar789/docs/.github/workflows/remote-sync-logic.yaml@main
+    with:
+      service_name: ${{ github.event.repository.name }}
+      spec_path: /account/travellers
+      reason: ${{ github.event.inputs.reason }}
+      pr_id: ${{ github.event.pull_request.number }}
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

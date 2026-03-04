@@ -1,0 +1,92 @@
+name: Master Sync Logic
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+      spec_path:
+        required: true
+        type: string
+        description: "Additional path like /account/travellers"
+      reason:
+        required: false
+        type: string
+        description: "Reason for sync"
+      pr_id:
+        required: false
+        type: string
+        description: "PR ID that triggered the sync"
+    secrets:
+      APP_ID:
+        required: true
+      APP_PRIVATE_KEY:
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Token
+        id: generate_token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout Central Repo
+        uses: actions/checkout@v4
+        with:
+          repository: amitpanwar789/docs
+          token: ${{ steps.generate_token.outputs.token }}
+          path: central-repo
+
+      - name: Checkout Service Repo
+        uses: actions/checkout@v4
+        with:
+          path: service-repo
+
+      - name: Sync and Push
+        run: |
+          mkdir -p central-repo/api-reference${{ inputs.spec_path }}/
+          cp service-repo/api/sidebars.yaml central-repo/api-reference${{ inputs.spec_path }}/spec.yaml
+          
+          cd central-repo
+          git config user.name "API Bot"
+          git config user.email "bot@docs.com"
+          git add .
+
+          if [ -n "${{ inputs.reason }}" ]; then
+            COMMIT_MSG="Sync: ${{ inputs.service_name }} updated - Manually Trigger Reason: ${{ inputs.reason }}"
+          else
+            cd ../service-repo
+            PR_NUMBER=$(git log -1 --pretty=%B | grep -oP '(?<=#)\d+' | head -1 || echo "direct-push")
+            cd ../central-repo
+            COMMIT_MSG="Sync: ${{ inputs.service_name }} | Source PR: #$PR_NUMBER | SHA: ${GITHUB_SHA::7}"
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "$COMMIT_MSG"
+          
+          PUSH_SUCCESS=false
+          for i in {1..3}; do
+            echo "Push attempt $i/3..."
+            if git pull origin main --rebase && git push origin main; then
+              PUSH_SUCCESS=true
+              break
+            fi
+            
+            if [ $i -lt 3 ]; then
+              echo "Push failed, retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+          
+          if [ "$PUSH_SUCCESS" = false ]; then
+            echo "Push failed after 3 attempts"
+            exit 1
+          fi
