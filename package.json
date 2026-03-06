@@ -1,0 +1,12 @@
+{
+    "name": "serko-api-docs",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "npx @redocly/cli preview"
+    },
+    "dependencies": {
+        "@redocly/realm": "*"
+    }
+}

@@ -1,0 +1,393 @@
+---
+openapi: 3.0.1
+info:
+  title: Accounts API
+  description: REST API for managing user accounts backed by Okta
+  version: v2.0
+servers:
+  - url: https://accounts-service-dev.noprd.eos-stack.cloud
+  - url: https://accounts-service-test.noprd.eos-stack.cloud
+  - url: https://accounts-service-stage.noprd.eos-stack.cloud
+  - url: https://accounts-service-shared.prd.eos-stack.cloud
+paths:
+  "/api/v1/accounts":
+    post:
+      summary: Create account
+      operationId: createAccount
+      parameters:
+        - name: X-Tenant-Id
+          in: header
+          required: true
+          description: The unique identifier of the tenant context for this request.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UserRequest"
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserResponse"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+  "/api/v1/accounts/{accountId}":
+    get:
+      summary: Get account
+      operationId: getAccount
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      responses:
+        '200':
+          description: Account retrieved
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserResponse"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+    patch:
+      summary: Update account
+      operationId: updateAccount
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/UserRequest"
+      responses:
+        '200':
+          description: Account updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserResponse"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete account
+      operationId: deleteAccount
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      responses:
+        '204':
+          description: Account deleted
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+
+  "/api/v1/accounts/members":
+    post:
+      summary: Create membership between account and organization
+      operationId: createMembers
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      requestBody:
+        required: false
+        content:
+          application/json: {}
+      responses:
+        '201':
+          description: Membership added
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MemberResponse"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '409':
+          "$ref": "#/components/responses/Conflict"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+    get:
+      summary: Get the membership details for the account
+      operationId: getMembers
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      responses:
+        '200':
+          description: Members retrieved
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MemberResponse"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+    put:
+      summary: Update membership for the account
+      operationId: updateMembers
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MemberRoleRequest"
+      responses:
+        '200':
+          description: Membership updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/MemberResponse"
+        '400':
+          "$ref": "#/components/responses/BadRequest"
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete membership for the account
+      operationId: deleteMember
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      responses:
+        '204':
+          description: Member deleted
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+
+  "/api/v1/members":
+    get:
+      summary: Return all members of an organization
+      operationId: getOrgMembers
+      x-allowed-roles:
+        - admin
+        - travelArranger
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          example: Bearer <access-token>
+      responses:
+        '200':
+          description: All members retrieved for an organization
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberResponse'
+        '404':
+          "$ref": "#/components/responses/NotFound"
+        '500':
+          "$ref": "#/components/responses/InternalServerError"
+
+components:
+  schemas:
+    OktaUserProfile:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        login:
+          type: string
+        mobilePhone:
+          type: string
+        tenantId:
+          type: string
+        organisationId:
+          type: string
+        organisationUnitId:
+          type: string
+        teamsId:
+          type: string
+        userType:
+          type: string
+        memberId:
+          type: string
+    UserRequest:
+      type: object
+      required:
+        - profile
+      properties:
+        profile:
+          "$ref": "#/components/schemas/OktaUserProfile"
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        created:
+          type: string
+          format: date-time
+        activated:
+          type: string
+          format: date-time
+        lastLogin:
+          type: string
+          format: date-time
+        lastUpdated:
+          type: string
+          format: date-time
+        emailVerificationStatus:
+          type: string
+        lastVerificationTime:
+          type: string
+          format: date-time
+        profile:
+          "$ref": "#/components/schemas/OktaUserProfile"
+        active:
+          type: boolean
+    MemberRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+    MemberResponse:
+      type: object
+      properties:
+        memberId:
+          type: string
+        accountId:
+          type: string
+        organisationId:
+          type: string
+        role:
+          type: string
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time 
+
+    ErrorResponse:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+        - timestamp
+        - correlationId
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+        errorCount:
+          type: integer
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ErrorResponse"

@@ -1,6 +1,4 @@
 
-extends:
-  - recommended
 
 rules:
   # 1. Endpoint path (Operations) -> operation-description

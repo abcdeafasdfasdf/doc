@@ -1,0 +1,37 @@
+# reunite:
+  # ignoreLint: true
+  # ignoreLinkChecker: true
+extends:
+  - ./custom-ruleset.yaml
+links:
+  - href: https://fonts.googleapis.com/css2?family=VT323&display=swap
+  - href: https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap
+seo:
+  title: Serko API Documentation
+  description: Comprehensive documentation for Serko's APIs.
+navbar:
+  items:
+    - page: 'apis/index.md'
+      label: API Reference
+markdown:
+  toc:
+    depth: 2
+logo:
+  image: images/serko.png
+  link: /
+footer:
+  copyrightText: Copyleft © Redocly Inc. No rights reserved.
+  # items:
+  #   - page: legal/terms.md
+  #     label: Terms
+  #   - page: legal/responsible-use.md
+  #     label: Responsible Use
+  #   - href: /
+  #     label: Cookies
+
+openapi:
+  corsProxyUrl: ''
+  
+
+reunite:
+  ignoreLinkChecker: true
