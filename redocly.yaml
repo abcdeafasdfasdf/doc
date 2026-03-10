@@ -17,7 +17,6 @@ markdown:
   toc:
     depth: 2
 logo:
-  image: images/serko.png
   link: /
 footer:
   copyrightText: Copyleft © Redocly Inc. No rights reserved.
