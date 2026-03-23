@@ -37,7 +37,7 @@ jobs:
       - name: Checkout Central Repo
         uses: actions/checkout@v4
         with:
-          repository: abcdeafasdfasdf/docs
+          repository: abcdeafasdfasdf/doc
           token: ${{ steps.generate_token.outputs.token }}
           path: central-repo
 
