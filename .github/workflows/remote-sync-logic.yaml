@@ -8,6 +8,15 @@ on:
       spec_path:
         required: true
         type: string
+        description: "Additional path like /account/travellers. Must start with / and contain only alphanumeric characters, hyphens, underscores, and forward slashes."
+      source_file:
+        required: true
+        type: string
+        description: "Relative path to the OpenAPI spec in the service repo. e.g. api/openapi.yaml"
+      reason:
+        required: false
+        type: string
+        description: "Reason for sync"
     secrets:
       APP_ID:
         required: true
@@ -20,27 +29,92 @@ jobs:
     steps:
       - name: Generate Token
         id: generate_token
-        uses: tibdex/github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app_id: ${{ secrets.APP_ID }}
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      # We only need to checkout the Service Repo (Source)
-      # The Redocly action handles the Destination repo internally
+      - name: Checkout Central Repo
+        uses: actions/checkout@v4
+        with:
+          repository: amitpanwar789/docs
+          token: ${{ steps.generate_token.outputs.token }}
+          path: central-repo
+
       - name: Checkout Service Repo
         uses: actions/checkout@v4
-
-      - name: Repo File Sync
-        uses: Redocly/repo-file-sync-action@v1
         with:
-          # Source file from the service repo
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
-          SYNC_CONFIG: |
-            - source: api/openapi.yaml
-              dest: api-reference/${{ inputs.spec_path }}/spec.yaml
-              repository: abcdeafasdfasdf/doc
-              branch: main
-          COMMIT_EACH_FILE: false
-          # You can customize the message, but Redocly has a default one
-          COMMIT_PREFIX: "Sync: ${{ inputs.service_name }} | "
-          SKIP_PR: true # Set to true to push directly to the main branch
+          path: service-repo
+
+      - name: Sync and Push
+        run: |
+          # ── 1. Validate inputs ───────────────────────────────────────────────
+          if [[ ! "${{ inputs.spec_path }}" =~ ^(/[a-zA-Z0-9_-]+)+$ ]]; then
+            echo "Error: 'spec_path' value '${{ inputs.spec_path }}' is invalid."
+            echo "       Must start with '/' and contain only letters, numbers, hyphens, and underscores."
+            echo "       Example: /account/travellers"
+            exit 1
+          fi
+
+          # ── 2. Resolve all paths and context variables ───────────────────────
+          SERVICE_SOURCE_FILE="service-repo/${{ inputs.source_file }}"
+          CENTRAL_DEST_DIR="central-repo/api-reference${{ inputs.spec_path }}"
+          CENTRAL_DEST_FILE="$CENTRAL_DEST_DIR/spec.yaml"
+
+          SERVICE_REPO="${{ github.repository }}"
+          TRIGGERED_BY="${{ github.actor }}"
+          COMMIT_SHA="$GITHUB_SHA"
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          # ── 3. Verify source file exists ─────────────────────────────────────
+          if [ ! -f "$SERVICE_SOURCE_FILE" ]; then
+            echo "Error: Source file not found at '$SERVICE_SOURCE_FILE'."
+            echo "       Ensure '${{ inputs.source_file }}' exists in the service repo '$SERVICE_REPO'."
+            exit 1
+          fi
+
+          # ── 4. Copy spec to central repo ─────────────────────────────────────
+          echo "Syncing: '$SERVICE_SOURCE_FILE' → '$CENTRAL_DEST_FILE'"
+          mkdir -p "$CENTRAL_DEST_DIR"
+          cp "$SERVICE_SOURCE_FILE" "$CENTRAL_DEST_FILE"
+
+          # ── 5. Stage the changed file ─────────────────────────────────────────
+          cd central-repo
+          git config user.name "API Bot"
+          git config user.email "bot@docs.com"
+          git add "api-reference${{ inputs.spec_path }}/spec.yaml"
+
+          # ── 6. Build commit message ───────────────────────────────────────────
+          if [ -n "${{ inputs.reason }}" ]; then
+            COMMIT_MSG=$(printf "sync(${{ inputs.service_name }}): manual trigger\n\nReason:   ${{ inputs.reason }}\nService:  %s\nActor:    %s\nSHA:      %s" "$SERVICE_REPO" "$TRIGGERED_BY" "$SHORT_SHA")
+          else
+            COMMIT_MSG=$(printf "sync(${{ inputs.service_name }}): api spec updated\n\nService:  %s\nCommit:   %s/commit/%s\nActor:    %s" "$SERVICE_REPO" "$SERVICE_REPO" "$COMMIT_SHA" "$TRIGGERED_BY")
+          fi
+
+          # ── 7. Skip if nothing changed ────────────────────────────────────────
+          if git diff --cached --quiet; then
+            echo "No changes detected — spec is already up to date in the central repo."
+            exit 0
+          fi
+
+          git commit -m "$COMMIT_MSG"
+          # ── 8. Push with retry on concurrent conflict ─────────────────────────
+          PUSH_SUCCESS=false
+          for i in {1..3}; do
+            echo "Push attempt $i/3..."
+            if git pull origin main --rebase && git push origin main; then
+              PUSH_SUCCESS=true
+              break
+            fi
+
+            if [ $i -lt 3 ]; then
+              echo "Push attempt $i/3 failed — retrying in 5 seconds..."
+              sleep 5
+            fi
+          done
+
+          if [ "$PUSH_SUCCESS" = false ]; then
+            echo "Error: Failed to push to central repo after 3 attempts."
+            echo "       This may indicate a persistent rebase conflict. Check the central repo manually."
+            exit 1
+          fi
