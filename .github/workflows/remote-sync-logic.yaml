@@ -38,13 +38,13 @@ jobs:
           # 2. Explicitly list the repositories the token needs access to
           # Use a comma-separated list or multiline string
           repositories: |
-            docs
+            doc
             ${{ github.event.repository.name }}
 
       - name: Checkout Central Repo
         uses: actions/checkout@v4
         with:
-          repository: abcdeafasdfasdf/docs
+          repository: abcdeafasdfasdf/doc
           token: ${{ steps.generate_token.outputs.token }}
           ref: ${{ github.head_ref }}
           persist-credentials: false
