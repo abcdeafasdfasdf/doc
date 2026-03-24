@@ -32,14 +32,22 @@ jobs:
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          # 1. Specify the owner (your organization name)
           owner: ${{ github.repository_owner }}
+          # 2. Explicitly list the repositories the token needs access to
+          # Use a comma-separated list or multiline string
+          repositories: |
+            docs
+            ${{ github.event.repository.name }}
 
       - name: Checkout Central Repo
         uses: actions/checkout@v4
         with:
           repository: abcdeafasdfasdf/docs
           token: ${{ steps.generate_token.outputs.token }}
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
           path: central-repo
 
       - name: Checkout Service Repo
