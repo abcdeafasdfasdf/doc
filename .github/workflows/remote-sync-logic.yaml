@@ -47,7 +47,6 @@ jobs:
           repository: abcdeafasdfasdf/doc
           token: ${{ steps.generate_token.outputs.token }}
           ref: ${{ github.head_ref }}
-          persist-credentials: false
           path: central-repo
 
       - name: Checkout Service Repo
