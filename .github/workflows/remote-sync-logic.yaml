@@ -52,10 +52,11 @@ jobs:
       - name: Sync and Push
         run: |
           # ── 1. Validate inputs ───────────────────────────────────────────────
-          if [[ ! "${{ inputs.spec_path }}" =~ ^(/[a-zA-Z0-9_-]+)+$ ]]; then
+          if [[ ! "${{ inputs.spec_path }}" =~ ^(/[a-zA-Z0-9][a-zA-Z0-9\ ]*)+$ ]]; then
             echo "Error: 'spec_path' value '${{ inputs.spec_path }}' is invalid."
-            echo "       Must start with '/' and contain only letters, numbers, hyphens, and underscores."
-            echo "       Example: /account/travellers"
+            echo "       Must start with '/' and each segment must start with a letter or number."
+            echo "       Only letters, numbers, and spaces are allowed. No hyphens or underscores."
+            echo "       Example: /Account Management/Accounts"
             exit 1
           fi
 
@@ -99,7 +100,6 @@ jobs:
             echo "No changes detected — spec is already up to date in the central repo."
             exit 0
           fi
-
           git commit -m "$COMMIT_MSG"
           # ── 8. Push with retry on concurrent conflict ─────────────────────────
           PUSH_SUCCESS=false
