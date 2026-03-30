@@ -1,30 +1,15 @@
-name: Master Sync Logic
+name: Scheduled API Spec Pull Sync
 on:
-  workflow_call:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly at midnight on Sunday
+  workflow_dispatch:
     inputs:
-      service_name:
-        required: true
-        type: string
-      spec_path:
-        required: true
-        type: string
-        description: "Additional path like /account/travellers. Must start with / and contain only alphanumeric characters, hyphens, underscores, and forward slashes."
-      source_file:
-        required: true
-        type: string
-        description: "Relative path to the OpenAPI spec in the service repo. e.g. api/openapi.yaml"
       reason:
-        required: false
-        type: string
-        description: "Reason for sync"
-    secrets:
-      APP_ID:
-        required: true
-      APP_PRIVATE_KEY:
-        required: true
+        description: "Manual sync reason"
+        default: "Manual weekly refresh"
 
 jobs:
-  sync:
+  pull-and-sync:
     runs-on: ubuntu-latest
     steps:
       - name: Generate Token
@@ -32,92 +17,68 @@ jobs:
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          # 1. Specify the owner (your organization name)
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Checkout Central Repo
         uses: actions/checkout@v4
         with:
-          repository: abcdeafasdfasdf/doc
-          token: ${{ steps.generate_token.outputs.token }}
-          ref: ${{ github.head_ref }}
           path: central-repo
+          token: ${{ steps.generate_token.outputs.token }}
 
-      - name: Checkout Service Repo
-        uses: actions/checkout@v4
-        with:
-          path: service-repo
-
-      - name: Sync and Push
+      - name: Run Sync Script
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          # ── 1. Validate inputs ───────────────────────────────────────────────
-          if [[ ! "${{ inputs.spec_path }}" =~ ^(/[a-zA-Z0-9][a-zA-Z0-9\ ]*)+$ ]]; then
-            echo "Error: 'spec_path' value '${{ inputs.spec_path }}' is invalid."
-            echo "       Must start with '/' and each segment must start with a letter or number."
-            echo "       Only letters, numbers, and spaces are allowed. No hyphens or underscores."
-            echo "       Example: /Account Management/Accounts"
-            exit 1
-          fi
-
-          # ── 2. Resolve all paths and context variables ───────────────────────
-          SERVICE_SOURCE_FILE="service-repo/${{ inputs.source_file }}"
-          CENTRAL_DEST_DIR="central-repo/api-reference${{ inputs.spec_path }}"
-          CENTRAL_DEST_FILE="$CENTRAL_DEST_DIR/spec.yaml"
-
-          SERVICE_REPO="${{ github.repository }}"
-          TRIGGERED_BY="${{ github.actor }}"
-          COMMIT_SHA="$GITHUB_SHA"
-          SHORT_SHA="${GITHUB_SHA::7}"
-
-          # ── 3. Verify source file exists ─────────────────────────────────────
-          if [ ! -f "$SERVICE_SOURCE_FILE" ]; then
-            echo "Error: Source file not found at '$SERVICE_SOURCE_FILE'."
-            echo "       Ensure '${{ inputs.source_file }}' exists in the service repo '$SERVICE_REPO'."
-            exit 1
-          fi
-
-          # ── 4. Copy spec to central repo ─────────────────────────────────────
-          echo "Syncing: '$SERVICE_SOURCE_FILE' → '$CENTRAL_DEST_FILE'"
-          mkdir -p "$CENTRAL_DEST_DIR"
-          cp "$SERVICE_SOURCE_FILE" "$CENTRAL_DEST_FILE"
-
-          # ── 5. Stage the changed file ─────────────────────────────────────────
           cd central-repo
-          git config user.name "API Bot"
+          git config user.name "API Sync Bot"
           git config user.email "bot@docs.com"
-          git add "api-reference${{ inputs.spec_path }}/spec.yaml"
+          
+          # Read the JSON registry
+          SERVICES=$(cat services-registry.json | jq -c '.[]')
+          
+          ANY_CHANGES=false
 
-          # ── 6. Build commit message ───────────────────────────────────────────
-          if [ -n "${{ inputs.reason }}" ]; then
-            COMMIT_MSG=$(printf "sync(${{ inputs.service_name }}): manual trigger\n\nReason:   ${{ inputs.reason }}\nService:  %s\nActor:    %s\nSHA:      %s" "$SERVICE_REPO" "$TRIGGERED_BY" "$SHORT_SHA")
-          else
-            COMMIT_MSG=$(printf "sync(${{ inputs.service_name }}): api spec updated\n\nService:  %s\nCommit:   %s/commit/%s\nActor:    %s" "$SERVICE_REPO" "$SERVICE_REPO" "$COMMIT_SHA" "$TRIGGERED_BY")
-          fi
+          for row in $SERVICES; do
+            NAME=$(echo ${row} | jq -r '.name')
+            REPO=$(echo ${row} | jq -r '.repo')
+            SRC=$(echo ${row} | jq -r '.source_path')
+            DEST_PATH=$(echo ${row} | jq -r '.target_path')
 
-          # ── 7. Skip if nothing changed ────────────────────────────────────────
-          if git diff --cached --quiet; then
-            echo "No changes detected — spec is already up to date in the central repo."
-            exit 0
-          fi
-          git commit -m "$COMMIT_MSG"
-          # ── 8. Push with retry on concurrent conflict ─────────────────────────
-          PUSH_SUCCESS=false
-          for i in {1..3}; do
-            echo "Push attempt $i/3..."
-            if git pull origin main --rebase && git push origin main; then
-              PUSH_SUCCESS=true
-              break
+            echo "--- Processing $NAME ($REPO) ---"
+
+            # 1. Clone service repo into a temp folder
+            git clone --depth 1 "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" temp_service_repo
+
+            # 2. Check if source file exists
+            if [ -f "temp_service_repo/$SRC" ]; then
+              mkdir -p "api-reference$DEST_PATH"
+              
+              # 3. Copy file
+              cp "temp_service_repo/$SRC" "api-reference$DEST_PATH/spec.yaml"
+              
+              # 4. Check for changes
+              git add "api-reference$DEST_PATH/spec.yaml"
+              if ! git diff --cached --quiet; then
+                echo "Changes detected for $NAME"
+                git commit -m "sync($NAME): update spec from $REPO"
+                ANY_CHANGES=true
+              else
+                echo "No changes for $NAME"
+              fi
+            else
+              echo "Warning: Source $SRC not found in $REPO"
             fi
 
-            if [ $i -lt 3 ]; then
-              echo "Push attempt $i/3 failed — retrying in 5 seconds..."
-              sleep 5
-            fi
+            # Clean up temp folder for next iteration
+            rm -rf temp_service_repo
           done
 
-          if [ "$PUSH_SUCCESS" = false ]; then
-            echo "Error: Failed to push to central repo after 3 attempts."
-            echo "       This may indicate a persistent rebase conflict. Check the central repo manually."
-            exit 1
+          # ── 5. Push all changes at once ─────────────────────────────────────
+          if [ "$ANY_CHANGES" = true ]; then
+            echo "Pushing all accumulated changes..."
+            git pull origin main --rebase
+            git push origin main
+          else
+            echo "Everything is already up to date."
           fi
