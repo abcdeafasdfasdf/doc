@@ -1,0 +1,8 @@
+[
+  {
+    "name": "auth-service",
+    "repo": "abcdeafasdfasdf/testing",
+    "source_path": "api/openapi.yaml",
+    "target_path": "/identity/auth"
+  }
+]
